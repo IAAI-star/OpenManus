@@ -1,16 +1,9 @@
-import asyncio
-import json
-from typing import List, Optional
-
-import socketio
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from typing import List
 
-# Initialize FastAPI and Socket.IO
 app = FastAPI()
-sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
-socket_app = socketio.ASGIApp(sio, app)
 
 # CORS middleware
 app.add_middleware(
@@ -24,43 +17,55 @@ app.add_middleware(
 # Serve static files
 app.mount("/", StaticFiles(directory="dist", html=True), name="static")
 
-# Store connected clients
-connected_clients: List[str] = []
+# Store connected websockets
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
 
-@sio.event
-async def connect(sid, environ):
-    print(f"Client connected: {sid}")
-    connected_clients.append(sid)
-    await sio.emit('message', {'role': 'assistant', 'content': 'Connected to OpenManus UI'}, room=sid)
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        await websocket.send_json({
+            'role': 'assistant',
+            'content': 'Connected to OpenManus UI'
+        })
 
-@sio.event
-async def disconnect(sid):
-    print(f"Client disconnected: {sid}")
-    if sid in connected_clients:
-        connected_clients.remove(sid)
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
 
-@sio.event
-async def message(sid, data):
-    print(f"Received message from {sid}: {data}")
-    # Echo back the message for now
-    response = {
-        'role': 'assistant',
-        'content': f'Received your message: {data}'
-    }
-    await sio.emit('message', response, room=sid)
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            await connection.send_json(message)
 
-    # Send a sample plan update
-    plan = {
-        'id': '1',
-        'title': 'Sample Plan',
-        'steps': [
-            {'text': 'First step', 'status': 'completed'},
-            {'text': 'Current step', 'status': 'in_progress'},
-            {'text': 'Next step', 'status': 'not_started'}
-        ]
-    }
-    await sio.emit('plan_update', plan, room=sid)
+manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Echo back the message
+            response = {
+                'role': 'assistant',
+                'content': f'Received your message: {data}'
+            }
+            await websocket.send_json(response)
+
+            # Send a sample plan update
+            plan = {
+                'id': '1',
+                'title': 'Sample Plan',
+                'steps': [
+                    {'text': 'First step', 'status': 'completed'},
+                    {'text': 'Current step', 'status': 'in_progress'},
+                    {'text': 'Next step', 'status': 'not_started'}
+                ]
+            }
+            await websocket.send_json({'type': 'plan_update', 'data': plan})
+    except:
+        manager.disconnect(websocket)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(socket_app, host="0.0.0.0", port=8000, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

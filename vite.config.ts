@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/socket.io': {
+      '/ws': {
         target: 'ws://localhost:8000',
         ws: true
       }

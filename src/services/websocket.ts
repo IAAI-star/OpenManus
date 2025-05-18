@@ -1,49 +1,61 @@
-import { io, Socket } from 'socket.io-client';
 import { Message, Plan } from '../types';
 
 export class WebSocketService {
-  private socket: Socket | null = null;
+  private socket: WebSocket | null = null;
   private messageHandler: ((message: Message) => void) | null = null;
   private planHandler: ((plan: Plan) => void) | null = null;
   private connectionHandler: ((connected: boolean) => void) | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectDelay = 1000;
 
   constructor() {
-    this.socket = io('/', {
-      transports: ['websocket'],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
+    this.connect();
+  }
 
+  private connect() {
+    this.socket = new WebSocket(`ws://${window.location.host}/ws`);
     this.setupEventListeners();
   }
 
   private setupEventListeners() {
     if (!this.socket) return;
 
-    this.socket.on('connect', () => {
+    this.socket.onopen = () => {
       console.log('Connected to WebSocket server');
       this.connectionHandler?.(true);
-    });
+      this.reconnectAttempts = 0;
+    };
 
-    this.socket.on('disconnect', () => {
+    this.socket.onclose = () => {
       console.log('Disconnected from WebSocket server');
       this.connectionHandler?.(false);
-    });
+      this.tryReconnect();
+    };
 
-    this.socket.on('message', (message: Message) => {
-      console.log('Received message:', message);
-      this.messageHandler?.(message);
-    });
+    this.socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'plan_update') {
+        console.log('Received plan update:', data.data);
+        this.planHandler?.(data.data);
+      } else {
+        console.log('Received message:', data);
+        this.messageHandler?.(data);
+      }
+    };
 
-    this.socket.on('plan_update', (plan: Plan) => {
-      console.log('Received plan update:', plan);
-      this.planHandler?.(plan);
-    });
-
-    this.socket.on('connect_error', (error) => {
-      console.error('Connection error:', error);
+    this.socket.onerror = (error) => {
+      console.error('WebSocket error:', error);
       this.connectionHandler?.(false);
-    });
+    };
+  }
+
+  private tryReconnect() {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+      setTimeout(() => this.connect(), this.reconnectDelay);
+    }
   }
 
   public onMessage(handler: (message: Message) => void) {
@@ -59,15 +71,15 @@ export class WebSocketService {
   }
 
   public sendMessage(message: string) {
-    if (this.socket?.connected) {
-      this.socket.emit('message', message);
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(message);
     } else {
       console.warn('Cannot send message: WebSocket not connected');
     }
   }
 
   public disconnect() {
-    this.socket?.disconnect();
+    this.socket?.close();
   }
 }
 
