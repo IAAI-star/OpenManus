@@ -2,6 +2,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from typing import List
+import uvicorn
 
 app = FastAPI()
 
@@ -63,9 +64,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 ]
             }
             await websocket.send_json({'type': 'plan_update', 'data': plan})
-    except:
+    except Exception as e:
+        print(f"WebSocket error: {e}")
         manager.disconnect(websocket)
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

@@ -6,8 +6,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/ws': {
-        target: 'ws://localhost:8000',
-        ws: true
+        target: 'ws://127.0.0.1:8000',
+        ws: true,
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path
       }
     }
   }
