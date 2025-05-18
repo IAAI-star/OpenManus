@@ -1,15 +1,14 @@
 import ReactMarkdown from 'react-markdown';
-
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
+import { Message } from '../types';
+import { useChatStore } from '../store';
 
 interface ChatWindowProps {
   messages: Message[];
 }
 
 const ChatWindow = ({ messages }: ChatWindowProps) => {
+  const { isLoading } = useChatStore();
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-4 h-[600px] overflow-y-auto">
       {messages.map((message, index) => (
@@ -30,6 +29,11 @@ const ChatWindow = ({ messages }: ChatWindowProps) => {
           </div>
         </div>
       ))}
+      {isLoading && (
+        <div className="flex justify-center items-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      )}
     </div>
   );
 };
