@@ -8,9 +8,15 @@ export class WebSocketService {
   private connectionHandler: ((connected: boolean) => void) | null = null;
 
   constructor() {
-    this.socket = io('ws://localhost:8000', {
+    // Connect to the current host with the correct path
+    const host = window.location.host;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    
+    this.socket = io(`${protocol}//${host}`, {
       path: '/ws',
       transports: ['websocket'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
 
     this.setupEventListeners();
@@ -30,11 +36,18 @@ export class WebSocketService {
     });
 
     this.socket.on('message', (message: Message) => {
+      console.log('Received message:', message);
       this.messageHandler?.(message);
     });
 
     this.socket.on('plan_update', (plan: Plan) => {
+      console.log('Received plan update:', plan);
       this.planHandler?.(plan);
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.error('Connection error:', error);
+      this.connectionHandler?.(false);
     });
   }
 
@@ -53,6 +66,8 @@ export class WebSocketService {
   public sendMessage(message: string) {
     if (this.socket?.connected) {
       this.socket.emit('message', message);
+    } else {
+      console.warn('Cannot send message: WebSocket not connected');
     }
   }
 
