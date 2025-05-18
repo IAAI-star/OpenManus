@@ -8,12 +8,7 @@ export class WebSocketService {
   private connectionHandler: ((connected: boolean) => void) | null = null;
 
   constructor() {
-    // Connect to the current host with the correct path
-    const host = window.location.host;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    
-    this.socket = io(`${protocol}//${host}`, {
-      path: '/ws',
+    this.socket = io('/', {
       transports: ['websocket'],
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
